@@ -1,0 +1,33 @@
+name: Publish current FPL Draft standings
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 */3 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: fpl-standings-sync
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch and validate all three league tables
+        run: python scripts/sync_standings.py
+      - name: Commit standings only if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data.json data.js
+          if ! git diff --cached --quiet; then
+            git commit -m "Update current FPL Draft standings"
+            git push
+          else
+            echo "No standings changes"
+          fi

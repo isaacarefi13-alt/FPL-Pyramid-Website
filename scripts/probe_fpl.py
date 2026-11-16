@@ -47,6 +47,13 @@ def main():
                     continue
                 print(f"  {path}: HTTP {status}; keys={sorted(data)}")
                 summarize(data)
+                if path.endswith("/public"):
+                    leagues = data.get("entry", {}).get("league_set", [])
+                    for league in leagues:
+                        if isinstance(league, dict):
+                            print("    league_set item: " + json.dumps({k: v for k, v in league.items() if k in ("id", "league", "league_id", "name", "entry", "entry_id", "scoring", "variety")}, sort_keys=True))
+                        else:
+                            print("    league_set item: " + repr(league))
             except urllib.error.HTTPError as error:
                 print(f"  {path}: HTTP {error.code}")
             except (urllib.error.URLError, ValueError, TimeoutError) as error:

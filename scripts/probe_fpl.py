@@ -1,64 +1,42 @@
 #!/usr/bin/env python3
-"""Read-only discovery of FPL Draft entry metadata and possible league IDs.
+"""Read-only verification of three FPL Draft league IDs and standings.
 
-Entry URLs are not league IDs. Never write standings from this diagnostic.
+Never modifies site data. Fails if an endpoint is inaccessible or a league
+does not contain the expected 10 managers.
 """
 import json
 import urllib.error
 import urllib.request
 
-ENTRIES = {"FPL1": 148874, "FPL2": 82799, "FPL3": 215819}
-BASE = "https://draft.premierleague.com/api"
-PATHS = ["/entry/{id}/public", "/entry/{id}", "/entry/{id}/history"]
-
-def fetch(path):
-    request = urllib.request.Request(BASE + path, headers={
-        "User-Agent": "Mozilla/5.0 FPL-Pyramid-Diagnostics/0.2",
-        "Accept": "application/json",
-    })
-    with urllib.request.urlopen(request, timeout=20) as response:
-        return response.status, json.load(response)
-
-def summarize(value, prefix="", depth=0):
-    if depth > 3:
-        return
-    if isinstance(value, dict):
-        for key, child in value.items():
-            k = str(key).lower()
-            if any(word in k for word in ("league", "entry", "event", "season")):
-                if isinstance(child, (str, int, float, bool)) or child is None:
-                    print(f"    {prefix}{key}={child}")
-                elif isinstance(child, list):
-                    print(f"    {prefix}{key}: list ({len(child)} items)")
-                elif isinstance(child, dict):
-                    print(f"    {prefix}{key}: object keys={sorted(child)}")
-            if isinstance(child, dict):
-                summarize(child, prefix + str(key) + ".", depth + 1)
+LEAGUES = {"FPL1": 28811, "FPL2": 16233, "FPL3": 26756}
+BASE = "https://draft.premierleague.com/api/league/{id}/details"
 
 def main():
-    for division, entry_id in ENTRIES.items():
-        print(f"\\n{division} entry {entry_id}:")
-        for pattern in PATHS:
-            path = pattern.format(id=entry_id)
-            try:
-                status, data = fetch(path)
-                if not isinstance(data, dict):
-                    print(f"  {path}: HTTP {status}; unexpected JSON type")
-                    continue
-                print(f"  {path}: HTTP {status}; keys={sorted(data)}")
-                summarize(data)
-                if path.endswith("/public"):
-                    leagues = data.get("entry", {}).get("league_set", [])
-                    for league in leagues:
-                        if isinstance(league, dict):
-                            print("    league_set item: " + json.dumps({k: v for k, v in league.items() if k in ("id", "league", "league_id", "name", "entry", "entry_id", "scoring", "variety")}, sort_keys=True))
-                        else:
-                            print("    league_set item: " + repr(league))
-            except urllib.error.HTTPError as error:
-                print(f"  {path}: HTTP {error.code}")
-            except (urllib.error.URLError, ValueError, TimeoutError) as error:
-                print(f"  {path}: {type(error).__name__}: {error}")
-    print("\\nDiagnostic only. A successful entry lookup does not establish a correct league ID.")
+    errors = []
+    for division, league_id in LEAGUES.items():
+        request = urllib.request.Request(BASE.format(id=league_id), headers={
+            "User-Agent": "Mozilla/5.0 FPL-Pyramid-Diagnostics/0.3",
+            "Accept": "application/json",
+        })
+        try:
+            with urllib.request.urlopen(request, timeout=25) as response:
+                data = json.load(response)
+            league = data.get("league", {})
+            entries = data.get("league_entries", [])
+            standings = data.get("standings", [])
+            print(f"{division} league {league_id}: name={league.get('name')!r}; entries={len(entries)}; standings={len(standings)}")
+            print(f"  league keys={sorted(league)}")
+            print(f"  entry fields={sorted(entries[0]) if entries else []}")
+            print(f"  standing fields={sorted(standings[0]) if standings else []}")
+            if len(entries) != 10 or len(standings) != 10:
+                errors.append(f"{division}: expected 10 entries and standings, got {len(entries)} and {len(standings)}")
+        except (urllib.error.URLError, ValueError, TimeoutError) as error:
+            errors.append(f"{division}: {type(error).__name__}: {error}")
+    if errors:
+        for error in errors:
+            print("ERROR: " + error)
+        raise SystemExit(1)
+    print("PASS: all three leagues returned 10 entries and 10 standings. Match history still needs separate verification.")
 
 if __name__ == "__main__":
     main()

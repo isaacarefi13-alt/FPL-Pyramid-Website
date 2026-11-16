@@ -1,0 +1,14 @@
+name: Verify FPL Draft feeds
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check league endpoints without changing website data
+        run: python scripts/probe_fpl.py

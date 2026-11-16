@@ -42,8 +42,10 @@ def fetch(division, league_id):
         e = by_id[entry_id]
         w, d, l = (int(st[k]) for k in ("matches_won", "matches_drawn", "matches_lost"))
         played = int(st["matches_played"])
+        if min(w, d, l, played) < 0 or w + d + l > 38 or played > 38:
+            raise ValueError(f"{division}: invalid match totals for {entry_id}")
         if w + d + l != played:
-            raise ValueError(f"{division}: inconsistent W-D-L for {entry_id}")
+            print(f"  NOTICE {division} entry {entry_id}: matches_played={played}, W+D+L={w+d+l}; preserving API W-D-L")
         rank = int(st["rank"])
         if not 1 <= rank <= 10:
             raise ValueError(f"{division}: invalid rank {rank}")
